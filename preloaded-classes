@@ -529,8 +529,10 @@ android.hardware.input.InputManager$InputDevicesChangedListener
 android.hardware.usb.UsbDevice
 android.hardware.usb.UsbDeviceConnection
 android.hardware.usb.UsbRequest
+android.hybrid.ExtendedPropertiesUtils
 android.hybrid.HybridManager
 android.hybrid.PropertyContainer
+android.hybrid.PropertyListener
 android.inputmethodservice.ExtractEditText
 android.location.GpsSatellite
 android.location.GpsStatus
