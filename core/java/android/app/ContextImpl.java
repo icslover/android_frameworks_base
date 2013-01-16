@@ -1880,9 +1880,6 @@ class ContextImpl extends Context {
             try {
                 // Save current thread into global context
                 HybridManager.mMainThread = thread;
-
-                // Load container, in order to get latest properties
-                HybridManager.getPropertyArray();
   
                 // Try to get the context for the current thread. If something
                 // goes wrong, we throw an exception.
