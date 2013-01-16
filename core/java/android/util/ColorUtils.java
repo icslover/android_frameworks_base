@@ -19,6 +19,7 @@ package android.util;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Color;
+import android.hybrid.HybridManager;
 import android.provider.Settings;
 
 import com.android.internal.R;
@@ -103,8 +104,7 @@ public class ColorUtils {
   
         // Parse
         String[] colors = (result.currentSetting == null || result.currentSetting.isEmpty()  ?
-                ColorUtils.NO_COLOR : result.currentSetting).split(
-                ExtendedPropertiesUtils.PARANOID_STRING_DELIMITER);
+                ColorUtils.NO_COLOR : result.currentSetting).split("\\|");
 
         // Sanity check 1, make sure array is within known bounds
         boolean isSane = colors.length >= 3 && colors.length <= 4;
@@ -121,7 +121,7 @@ public class ColorUtils {
         // Restore setting in case something is botched
         if (!isSane) {
             Settings.System.putString(context.getContentResolver(), settingName, ColorUtils.NO_COLOR);
-            colors = ColorUtils.NO_COLOR.split(ExtendedPropertiesUtils.PARANOID_STRING_DELIMITER);
+            colors = ColorUtils.NO_COLOR.split("\\|");
         }        
 
         // Get index
@@ -142,9 +142,9 @@ public class ColorUtils {
         result.speed = colors.length < 4 ? 500 : Integer.parseInt(colors[3]);
 
         // Get default color
-        for(int i = 0; i < ExtendedPropertiesUtils.PARANOID_COLORS_SETTINGS.length; i++) {
-            if (ExtendedPropertiesUtils.PARANOID_COLORS_SETTINGS[i] == settingName) {
-                result.defaultColor = ExtendedPropertiesUtils.PARANOID_COLORCODES_DEFAULTS[i];
+        for(int i = 0; i < HybridManager.COLOR_SETTINGS.length; i++) {
+            if (HybridManager.COLOR_SETTINGS[i].equals(settingName)) {
+                result.defaultColor = HybridManager.COLOR_DEF_CODES[i];
                 break;
             }
         }

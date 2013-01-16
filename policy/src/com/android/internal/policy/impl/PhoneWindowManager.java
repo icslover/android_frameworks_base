@@ -41,6 +41,11 @@ import android.content.res.TypedArray;
 import android.database.ContentObserver;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
+import android.hybrid.HybridManager;
+import android.hybrid.PropertyListener;
+import android.hybrid.PropertyListener.HybridListener;
+import android.hybrid.PropertyListener.PropertyHandler;
+import android.hybrid.PropertyContainer;
 import android.media.AudioManager;
 import android.media.IAudioService;
 import android.media.Ringtone;
@@ -75,10 +80,8 @@ import com.android.internal.widget.PointerLocationView;
 import dalvik.system.DexClassLoader;
 
 import android.service.dreams.IDreamManager;
-import android.util.ExtendedPropertiesUtils;
 import android.util.DisplayMetrics;
 import android.util.EventLog;
-import android.util.ExtendedPropertiesUtils;
 import android.util.Log;
 import android.util.Slog;
 import android.util.SparseArray;
@@ -172,7 +175,7 @@ import java.lang.reflect.Constructor;
  * can be acquired with either thw Lw and Li lock held, so has the restrictions
  * of both of those when held.
  */
-public class PhoneWindowManager implements WindowManagerPolicy {
+public class PhoneWindowManager implements WindowManagerPolicy, HybridListener {
     static final String TAG = "WindowManager";
     static final boolean DEBUG = false;
     static final boolean localLOGV = false;
@@ -203,6 +206,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     static public final String SYSTEM_DIALOG_REASON_RECENT_APPS = "recentapps";
     static public final String SYSTEM_DIALOG_REASON_HOME_KEY = "homekey";
     static public final String SYSTEM_DIALOG_REASON_ASSIST = "assist";
+
+    static public final String SYSTEM_UI_PACKAGE = "com.android.systemui";
 
     /**
      * These are the system UI flags that, when changing, can cause the layout
@@ -245,6 +250,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
     Context mContext;
     Context mUiContext;
+    PropertyListener mPropertyListener;
     IWindowManager mWindowManager;
     WindowManagerFuncs mWindowManagerFuncs;
     PowerManager mPowerManager;
@@ -499,7 +505,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     private int mStatusBarDpi = 0;
 
     SettingsObserver mSettingsObserver;
-    UserInterfaceObserver mUserInterfaceObserver;
     ShortcutManager mShortcutManager;
     PowerManager.WakeLock mBroadcastWakeLock;
     boolean mHavePendingMediaKeyRepeatWithWakeLock;
@@ -587,34 +592,23 @@ public class PhoneWindowManager implements WindowManagerPolicy {
 
         @Override
         public void onChange(boolean selfChange) {
-            update(false);
+            updateSettings();
+            updateRotation(false);
         }
     }
 
-    class UserInterfaceObserver extends ContentObserver {
-        UserInterfaceObserver(Handler handler) {
-            super(handler);
-        }
+    @Override
+    public void onPropertyChanged(PropertyHandler props) {
+        updateHybridLayout(props);
+        getDimensions();
 
-        void observe() {
-            ContentResolver resolver = mContext.getContentResolver();
-            resolver.registerContentObserver(Settings.System.getUriFor(
-                    Settings.System.USER_INTERFACE_STATE), false, this);
-        }
-
-        @Override 
-        public void onChange(boolean selfChange) {
-            // Return for reset triggers
-            if (Settings.System.getInt(mContext.getContentResolver(), 
-                Settings.System.USER_INTERFACE_STATE, 0) == 0) {
-                return;
-            }
-
-            // Update layout
-            update(true);
-            
-            // Reset trigger
-            Settings.System.putInt(mContext.getContentResolver(), Settings.System.USER_INTERFACE_STATE, 0);
+        // Restart UI if necessary
+        try {
+            ActivityManagerNative.getDefault().killApplicationProcess(
+                    SYSTEM_UI_PACKAGE, AppGlobals.getPackageManager().getPackageUid(
+                    SYSTEM_UI_PACKAGE, UserHandle.myUserId()));
+        } catch (RemoteException e) {
+             // Good luck next time!
         }
     }
     
@@ -961,6 +955,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     public void init(Context context, IWindowManager windowManager,
             WindowManagerFuncs windowManagerFuncs) {
         mContext = context;
+        mPropertyListener = new PropertyListener(this);
+        mPropertyListener.startWatching(SYSTEM_UI_PACKAGE);
 
         mWindowManager = windowManager;
         mWindowManagerFuncs = windowManagerFuncs;
@@ -975,13 +971,10 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             mOrientationListener.setCurrentRotation(windowManager.getRotation());
         } catch (RemoteException ex) { }
 
-        updateHybridLayout();
+        updateHybridLayout(mPropertyListener.getHandler());
 
         mSettingsObserver = new SettingsObserver(mHandler);
         mSettingsObserver.observe();
-
-        mUserInterfaceObserver = new UserInterfaceObserver(mHandler);
-        mUserInterfaceObserver.observe();
 
         mShortcutManager = new ShortcutManager(context, mHandler);
         mShortcutManager.observe();
@@ -1136,37 +1129,20 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         mHdmiRotationLock = SystemProperties.getBoolean("persist.demo.hdmirotationlock", true);
     }
 
-    private void update(boolean updateUi) {
-        if (updateUi) {
-            updateHybridLayout();
-        }
-
-        updateSettings();
-        updateRotation(false);
-
-        if (updateUi) {
-            // Restart UI if necessary
-            String packageName = "com.android.systemui";
-            try {
-                ActivityManagerNative.getDefault().killApplicationProcess(
-                    packageName, AppGlobals.getPackageManager().getPackageUid(
-                    packageName, UserHandle.myUserId()));
-            } catch (RemoteException e) {
-                // Good luck next time!
-            }
-        }
-    }
-
-    private int updateHybridLayout() {
+    private int updateHybridLayout(PropertyHandler props) {
+        PropertyContainer container = HybridManager.getProperty(SYSTEM_UI_PACKAGE);
         int oldSystemUiLayout = mSystemUiLayout == 0 ?
-            ExtendedPropertiesUtils.getActualProperty("com.android.systemui.layout") : mSystemUiLayout;
-        ExtendedPropertiesUtils.refreshProperties();
-        mSystemDpi = ExtendedPropertiesUtils.getActualProperty("android.dpi");
-        mSystemUiDpi = ExtendedPropertiesUtils.getActualProperty("com.android.systemui.dpi");
-        mSystemUiLayout = ExtendedPropertiesUtils.getActualProperty("com.android.systemui.layout");
-        int mNavigationBarPercent = Integer.parseInt(ExtendedPropertiesUtils.getProperty("com.android.systemui.navbar.dpi", "100"));
+                container.getLayout() : mSystemUiLayout;
+        mSystemDpi = HybridManager.getIntegerProperty("android.dpi");
+        mSystemUiDpi = Integer.parseInt(props
+                .getValueForProperty(SYSTEM_UI_PACKAGE, HybridManager.TYPE_DPI));
+        mSystemUiLayout = Integer.parseInt(props
+                .getValueForProperty(SYSTEM_UI_PACKAGE, HybridManager.TYPE_LAYOUT));
+        int mNavigationBarPercent = Integer.parseInt(props
+                .getValueForProperty(SYSTEM_UI_PACKAGE + ".navbar", HybridManager.TYPE_DPI));
         mNavigationBarDpi = mNavigationBarPercent * mSystemUiDpi / 100;
-        int mStatusBarPercent = Integer.parseInt(ExtendedPropertiesUtils.getProperty("com.android.systemui.statusbar.dpi", "100"));
+        int mStatusBarPercent = Integer.parseInt(props
+                .getValueForProperty(SYSTEM_UI_PACKAGE + ".statusbar", HybridManager.TYPE_DPI));
         mStatusBarDpi = mStatusBarPercent * mSystemUiDpi / 100;
         return oldSystemUiLayout;
     }
@@ -3987,7 +3963,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 // and then updates our own bookkeeping based on the now-
                 // current user.
                 mSettingsObserver.onChange(false);
-                mUserInterfaceObserver.onChange(false);
             }
         }
     };

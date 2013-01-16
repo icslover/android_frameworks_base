@@ -2449,13 +2449,6 @@ public final class Settings {
          */
         public static final String EXPANDED_DESKTOP_STATE = "expanded_desktop_state";
 
-        /**
-         * User Interface State
-         * 1 = Rebuild UI, resets to 0 automatically
-         * @hide
-         */
-        public static final String USER_INTERFACE_STATE = "user_interface_state";
-
         /**	
          * Allows to show the background activity back the lockscreen
          * The value is boolean (1 or 0).
