@@ -51,8 +51,8 @@ public class HybridManager extends ExtendedPropertiesUtils {
     public static final String TYPE_MANCOL = "mancol";
 
     public static final String[] COLOR_SETTINGS = {Settings.System.NAV_BAR_COLOR,
-        Settings.System.NAV_BUTTON_COLOR, Settings.System.NAV_GLOW_COLOR,
-        Settings.System.STATUS_BAR_COLOR, Settings.System.STATUS_ICON_COLOR};
+            Settings.System.NAV_BUTTON_COLOR, Settings.System.NAV_GLOW_COLOR,
+            Settings.System.STATUS_BAR_COLOR, Settings.System.STATUS_ICON_COLOR};
     public static final int[] COLOR_DEF_CODES = 
             {0xFF000000, 0xB2FFFFFF, 0xFFFFFFFF, 0xFF000000, 0xFF33B5E5};
     public static final int COLOR_DEF_SIZE = 5;
