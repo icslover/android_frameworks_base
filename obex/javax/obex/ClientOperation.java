@@ -723,4 +723,8 @@ public final class ClientOperation implements Operation, BaseStream {
             }
         }
     }
+
+    public void noEndofBody() {
+
+    }
 }
